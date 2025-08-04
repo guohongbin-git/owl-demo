@@ -1,4 +1,5 @@
-Flask
-transformers
-Pillow
 torch
+transformers
+flask
+Pillow
+salesforce-lavis @ git+https://github.com/salesforce/LAVIS.git

@@ -1,125 +1,126 @@
-# OWLv2 通用物体检测 Web 应用
+# 人机协作式智能检测平台 (BLIP → 人工修正 → OWLv2 → CLIP)
 
-这是一个基于 Hugging Face 的 OWLv2 模型构建的通用物体检测 Web 应用程序。它允许用户上传图像，手动框选感兴趣的区域（ROI），然后输入文本查询来检测该区域内的物体。检测结果将可视化地显示在图像上，并列出检测到的物体信息。
+这是一个先进的、基于多模型协同工作的“以图搜图”智能检测平台。它巧妙地融合了当前最强大的视觉语言模型，并创造性地引入了“人机协作”机制，允许用户在关键环节对AI的判断进行干预和修正，从而极大地提升了检测的准确性、灵活性和鲁棒性。
 
-## 功能特性
+该项目从一个简单的、基于文本查询的 OWLv2 检测应用出发，经过多次迭代，最终进化为一个集成了 BLIP、OWLv2 和 CLIP 三种模型的复杂协同系统。
 
-*   **图像上传**：支持上传常见的图像格式。
-*   **交互式 ROI 选择**：用户可以在上传的图像上拖动、移动和调整大小来精确选择感兴趣的区域。
-*   **文本查询**：支持通过文本描述来指定要检测的物体类别。
-*   **物体检测**：利用 OWLv2 模型进行零样本（Zero-shot）物体检测。
-*   **结果可视化**：在处理后的图像上绘制边界框和标签。
-*   **结果列表**：以列表形式显示检测到的物体信息（分数、标签、边界框）。
-*   **图像保存**：支持下载带有检测结果的图像。
+**最终形态：一个结合了AI描述、人类智慧、AI定位和AI验证的强大工具。**
+
+![](assets/20250804_142709_image.png)
+
+## 核心功能与优势
+
+*   **以图搜图检测**: 用户可以上传一张“查询图片”，并框选出感兴趣的物体，然后在另一张“目标图片”中找到这个物体。
+*   **人机协作工作流**: 用户可以在AI（BLIP）生成初始描述后，对其进行**手动编辑和修正**，将人类的先验知识和判断力注入到AI工作流中，解决AI描述不准或有偏差的问题。
+*   **三模型混合架构**: 充分利用了每个模型的独特优势：
+    *   **BLIP**: 负责对用户框选的物体进行“看图说话”，生成精准的**文本描述**。
+    *   **OWLv2**: 作为强大的**定位器**，根据BLIP生成（或人类修正）的文本，在目标图片中高效地搜索并定位出候选物体。
+    *   **CLIP**: 担当最终的**验证者**，通过计算纯粹的视觉特征相似度，在候选物体中找出与原始查询物体最匹配的结果，确保最终结果的准确性。
+*   **动态阈值调整**: 用户可以动态调整两个关键阈值：OWLv2的候选框筛选阈值和最终的CLIP相似度阈值。
+*   **实时动态可视化**: 以“赛马”的形式，实时、动态地展示CLIP的验证过程，将模型决策过程直观地呈现给用户。
 
 ## 技术栈
 
-*   **后端**：Python 3.10+ (Flask)
-*   **前端**：HTML, CSS, JavaScript (Cropper.js)
-*   **AI 模型**：Hugging Face Transformers (OWLv2)
-*   **图像处理**：Pillow
+*   **后端**: Python 3.10+, Flask
+*   **前端**: HTML, CSS, JavaScript, Cropper.js, Server-Sent Events (SSE)
+*   **AI 模型**: Hugging Face Transformers
+    *   `google/owlv2-base-patch16-ensemble` (定位)
+    *   `Salesforce/blip-image-captioning-base` (描述)
+    *   `openai/clip-vit-base-patch32` (验证)
+*   **核心库**: PyTorch, Pillow
 
-## 环境设置
+## 安装与运行
 
-强烈建议使用 `venv` 或 `conda` 创建一个独立的 Python 虚拟环境来管理项目依赖。
+### 1. 环境准备
 
-### 1. 创建并激活虚拟环境
-
-**使用 `venv` (推荐)**
-
-```bash
-python3 -m venv venv
-source venv/bin/activate  # macOS/Linux
-# venv\Scripts\activate   # Windows
-```
-
-**使用 `conda` (如果您偏好)**
+强烈建议使用 `mamba` 或 `conda` 创建一个独立的 Python 虚拟环境。
 
 ```bash
-conda create -n owlv2_env python=3.10 -y
-conda activate owlv2_env
+# 推荐使用 mamba
+mamba create -n owlv2_env python=3.10 -y
+mamba activate owlv2_env
 ```
 
 ### 2. 安装依赖
 
-激活虚拟环境后，安装 `requirements.txt` 中列出的所有依赖：
+首先，尝试直接通过 `requirements.txt` 文件安装依赖：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 下载 Cropper.js
+--- 
 
-Cropper.js 是通过 CDN 引入的，因此无需手动下载。确保您的网络连接正常。
+### 🚨 macOS / Apple Silicon 安装故障排除
 
-## 运行应用程序
+如果您在安装过程中，遇到关于 `decord` 或 `open3d` 的错误，这通常是因为这些库没有为 Apple Silicon (M1/M2/M3芯片) 提供预编译的安装包。由于这些库主要用于视频和3D数据处理，对于我们当前这个纯图像应用来说**并非必需**。
 
-在项目根目录下，确保您的虚拟环境已激活，然后运行 Flask 应用：
+请遵循以下“外科手术式”的步骤来绕过此问题：
+
+**第1步：克隆 `salesforce-lavis` 仓库**
+
+在您的项目根目录（`owlv2/`）下，运行以下命令，将 LAVIS 的源代码克隆到一个临时文件夹中：
+
+```bash
+git clone https://github.com/salesforce/LAVIS.git lavis_tmp
+```
+
+**第2步：手动编辑其依赖文件**
+
+打开刚刚克隆的 `lavis_tmp/requirements.txt` 文件，找到并**删除**以下两行：
+
+*   `decord`
+*   `open3d==0.13.0`
+
+保存文件。
+
+**第3步：从修改后的本地源码进行安装**
+
+现在，使用 `pip` 从这个被我们修改过的本地文件夹中安装 LAVIS：
+
+```bash
+pip install ./lavis_tmp
+```
+
+这会安装 LAVIS 的核心功能，同时跳过那两个问题库。
+
+**第4步：安装项目剩余的依赖**
+
+LAVIS 安装成功后，再运行一次 `pip install` 来确保所有其他依赖（如 Flask, Pillow 等）都已正确安装：
+
+```bash
+pip install -r requirements.txt
+```
+
+`pip` 会很智能地发现 LAVIS 已经安装，并只安装剩余的库。
+
+**第5步：清理临时文件**
+
+确认一切安装成功后，可以删除临时文件夹：
+
+```bash
+rm -rf lavis_tmp
+```
+
+--- 
+
+### 3. 运行应用
+
+激活虚拟环境后，在项目根目录下运行 Flask 应用：
 
 ```bash
 python app.py
 ```
 
-应用程序启动后，您将在终端看到类似以下输出：
+在浏览器中打开 `http://127.0.0.1:8080` 即可开始使用。
 
-```
- * Serving Flask app 'app'
- * Debug mode: on
-WARNING: This is a development server. Do not use it in a production deployment.
-Use a production WSGI server instead.
- * Running on http://127.0.0.1:5000
-Press CTRL+C to quit
- * Restarting with stat
- * Debugger is active!
- * Debugger PIN: XXX-XXX-XXX
-```
+## 使用流程
 
-在浏览器中打开 `http://127.0.0.1:5000` 即可访问 Web 界面。
-
-## 使用方法
-
-1.  **上传图像**：点击“上传图像”按钮，选择您要进行物体检测的图片。
-2.  **框选感兴趣区域 (ROI)**：图片加载后，您会看到一个可拖动和调整大小的框。拖动鼠标可以绘制新的框，点击框内部可以移动框，拖动框的边缘或角落可以调整框的大小。
-3.  **输入查询文本**：在“查询文本”输入框中，输入您想要检测的物体描述，多个物体描述请使用逗号 `,` 分隔（例如：`a photo of a cat, a photo of a dog`）。
-4.  **开始检测**：点击“开始检测”按钮。
-5.  **查看结果**：等待片刻，处理后的图像将显示在下方，并在图像上绘制出检测到的物体边界框和标签。同时，下方会列出检测到的物体信息。
-6.  **保存图像**：点击“保存图像”按钮，可以将带有检测结果的图像下载到本地。
-
-## 故障排除
-
-*   **`IndentationError`**：Python 缩进错误。请检查 `app.py` 文件中的缩进是否正确，Python 严格依赖缩进来定义代码块。
-*   **`cannot identify image file`**：这通常是由于后端在尝试读取图像文件时，文件流已关闭或数据不完整。请确保前端正确发送了图像数据，并且后端只读取一次文件流。
-*   **Cropper.js 相关问题**：如果 Cropper.js 界面没有正确显示或功能异常，请检查浏览器开发者工具的控制台是否有 JavaScript 错误，并确保 Cropper.js 的 CDN 链接可以正常访问。
-
-## 贡献
-
-欢迎对本项目进行贡献！如果您有任何改进建议或发现 Bug，请随时提交 Issue 或 Pull Request。
-
-## 许可证
-
-本项目采用 MIT 许可证。详情请参阅 `LICENSE` 文件（如果存在）。
-
-## 上传到 GitHub
-
-如果您希望将此项目分享到 GitHub，请按照以下步骤操作：
-
-1.  **初始化 Git 仓库**：
-    ```bash
-    git init
-    ```
-2.  **添加文件**：
-    ```bash
-    git add .
-    ```
-3.  **提交更改**：
-    ```bash
-    git commit -m "Initial commit: OWLv2 Object Detection Web App"
-    ```
-4.  **在 GitHub 上创建新仓库**：访问 GitHub 网站，创建一个新的空仓库（不要初始化 README、.gitignore 或 License）。
-5.  **关联远程仓库并推送**：
-    ```bash
-    git remote add origin <您的GitHub仓库URL>
-    git push -u origin master
-    ```
-
-请确保替换 `<您的GitHub仓库URL>` 为您在 GitHub 上创建的仓库的实际 URL。
+1.  **上传查询图片**: 点击“上传查询图片”按钮，选择包含您想查找的物体的图片。
+2.  **框选物体**: 图片加载后，在图上拖动鼠标，精确地框选出您感兴趣的那个物体。
+3.  **生成文本描述**: 点击“生成文本描述”按钮。AI (BLIP) 会对您框选的物体进行描述，并自动填充到下方的文本框中。
+4.  **人工修正 (关键步骤)**: **检查并编辑**文本框中的描述。如果AI描述不准，您可以手动修改，使其更符合您的要求。这是提升准确率的关键。
+5.  **上传目标图片**: 点击“上传目标图片”按钮，选择您希望在此进行搜索的图片。
+6.  **设置阈值**: 根据需要，调整“OWLv2候选框阈值”和“最终CLIP相似度阈值”。
+7.  **开始检测**: 点击“开始实时检测竞赛”按钮。
+8.  **查看与分析结果**: 在下方的“检测竞赛场”中，实时观察所有候选框根据与原图的视觉相似度动态排序的过程。

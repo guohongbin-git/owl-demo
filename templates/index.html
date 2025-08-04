@@ -3,313 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OWLv2 Object Detection</title>
-    <!-- Cropper.js CSS -->
+    <title>Interactive Detection Race: Human -> BLIP -> OWLv2 -> CLIP</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            max-width: 900px;
-            margin: auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="file"],
-        input[type="text"],
-        button {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            border: 1px solid #ddd;
-            box-sizing: border-box;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .result-section {
-            margin-top: 20px;
-            border-top: 1px solid #eee;
-            padding-top: 20px;
-        }
-        .result-image img {
-            max-width: 100%;
-            height: auto;
-            display: block;
-            margin: 15px 0;
-            border: 1px solid #ddd;
-        }
-        .object-list {
-            list-style: none;
-            padding: 0;
-        }
-        .object-list li {
-            background: #e9ecef;
-            margin-bottom: 5px;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        .error-message {
-            color: red;
-            margin-top: 10px;
-        }
-        .loading-spinner {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
-        }
-        .loading-spinner::after {
-            content: '';
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #007bff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        /* Cropper.js specific styles */
-        .img-container {
-            max-width: 100%;
-            height: 400px; /* Fixed height for cropper container */
-            background-color: #f7f7f7;
-            overflow: hidden;
-            display: none; /* Hidden by default */
-        }
-        .img-container img {
-            max-width: 100%;
-            display: block;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #333; text-align: center; }
+        .form-group, button { margin-bottom: 15px; }
+        input[type="file"], textarea, button { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ddd; box-sizing: border-box; }
+        textarea { resize: vertical; min-height: 80px; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        .error-message { color: red; margin-top: 10px; text-align: center; font-weight: bold; }
+        .status-message { color: #555; margin-top: 10px; text-align: center; }
+        .loading-spinner { display: none; text-align: center; margin-top: 20px; }
+        .loading-spinner::after { content: ''; display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .img-container { max-width: 100%; height: 250px; background-color: #f7f7f7; overflow: hidden; display: none; border: 1px solid #ddd; }
+        .img-container img { max-width: 100%; display: block; }
+        .race-track { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; border: 1px solid #ddd; background: #f9f9f9; min-height: 100px; margin-top: 20px; transition: all 0.5s ease; }
+        .candidate-horse { border: 2px solid #ccc; border-radius: 5px; padding: 5px; background: white; text-align: center; transition: all 0.5s ease-in-out; width: 114px; }
+        .candidate-horse img { max-width: 100px; max-height: 100px; }
+        .candidate-horse .score { font-weight: bold; color: #333; margin-top: 5px; font-size: 14px; height: 1.2em; }
+        .threshold-controls { display: flex; gap: 20px; justify-content: space-around; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>OWLv2 通用物体检测</h1>
+        <h1>人机协作式实时检测竞赛</h1>
         <form id="detectionForm">
+            <!-- Step 1: Query Image -->
             <div class="form-group">
-                <label for="imageUpload">上传图像:</label>
-                <input type="file" id="imageUpload" name="image" accept="image/*" required>
-            </div>
-
-            <div class="image-preview-section">
-                <div class="img-container" id="imageContainer">
-                    <img id="originalImage" src="" alt="Original Image">
+                <label for="queryImageUpload">1. 上传查询图片 (您想找的物体):</label>
+                <input type="file" id="queryImageUpload" name="query_image" accept="image/*" required>
+                <div class="img-container" id="queryImageContainer">
+                    <img id="queryImage" src="" alt="Query Image">
                 </div>
-                <p id="roiInstruction" style="display: none; text-align: center; margin-top: 10px; color: #555;">在图片上拖动鼠标以框选感兴趣区域。</p>
             </div>
 
+            <!-- Step 2: Generate & Edit Caption -->
+            <div id="captionControls" style="display:none;">
+                <button type="button" id="generateCaptionBtn">2. 生成文本描述</button>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="queryText">编辑文本描述 (关键步骤):</label>
+                    <textarea id="queryText" name="query_text" placeholder="点击上方按钮生成描述，或在此手动输入..." required></textarea>
+                </div>
+            </div>
+
+            <!-- Step 3: Target Image & Detect -->
             <div id="detectionControls" style="display:none;">
                 <div class="form-group">
-                    <label for="queryTexts">查询文本 (逗号分隔，例如: a photo of a cat, a photo of a dog):</label>
-                    <input type="text" id="queryTexts" name="query_texts" placeholder="输入查询文本" required>
+                    <label for="targetImageUpload">3. 上传目标图片:</label>
+                    <input type="file" id="targetImageUpload" name="target_image" accept="image/*" required>
                 </div>
-                <button type="submit">开始检测</button>
+                <div class="threshold-controls form-group">
+                    <div style="flex: 1;">
+                        <label for="owlThresholdSlider">OWLv2 候选框阈值: <span id="owlThresholdValue">0.1</span></label>
+                        <input type="range" id="owlThresholdSlider" name="owl_threshold" min="0.05" max="0.5" value="0.1" step="0.01" style="width: 100%;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="clipThresholdSlider">最终 CLIP 相似度阈值: <span id="clipThresholdValue">0.2</span></label>
+                        <input type="range" id="clipThresholdSlider" name="clip_threshold" min="0.1" max="0.7" value="0.2" step="0.01" style="width: 100%;">
+                    </div>
+                </div>
+                <button type="submit" id="detectBtn">4. 开始实时检测竞赛</button>
             </div>
         </form>
-
+        
         <div class="loading-spinner" id="loadingSpinner"></div>
         <div class="error-message" id="errorMessage"></div>
+        <div class="status-message" id="statusMessage"></div>
 
-        <div class="result-section" id="resultSection" style="display:none;">
-            <h2>检测结果</h2>
-            <div class="result-image">
-                <img id="detectedImage" src="" alt="Detected Image" style="max-width: 100%; height: auto; display: none;">
-            </div>
-            <h3>检测到的物体:</h3>
-            <ul class="object-list" id="objectList"></ul>
-            <button id="saveImageBtn" style="display:none;">保存图像</button>
+        <div id="raceTrackArea" style="display:none;">
+            <h3>检测竞赛场</h3>
+            <p><strong>最终查询文本:</strong> <span id="finalQueryText"></span></p>
+            <div class="race-track" id="raceTrack"></div>
         </div>
     </div>
 
-    <!-- Cropper.js JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <script>
-        alert('Script is running!'); // Added for debugging
-        console.log('Script loaded and running!');
-
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM Content Loaded. Script started.');
-
-            const imageUpload = document.getElementById('imageUpload');
-            console.log('imageUpload element:', imageUpload);
-
-            const originalImage = document.getElementById('originalImage');
-            originalImage.onerror = function() {
-                console.error('Original image failed to load. Check src:', this.src);
-            };
-
-            const imageContainer = document.getElementById('imageContainer');
-            let cropper = null; // Cropper.js instance
+            const queryImageUpload = document.getElementById('queryImageUpload');
+            const queryImage = document.getElementById('queryImage');
+            const queryImageContainer = document.getElementById('queryImageContainer');
+            let cropper = null;
 
             const detectionForm = document.getElementById('detectionForm');
             const errorMessage = document.getElementById('errorMessage');
+            const statusMessage = document.getElementById('statusMessage');
             const loadingSpinner = document.getElementById('loadingSpinner');
-            const resultSection = document.getElementById('resultSection');
-            const detectedImage = document.getElementById('detectedImage');
-            const objectList = document.getElementById('objectList');
-            const saveImageBtn = document.getElementById('saveImageBtn');
+            
+            const captionControls = document.getElementById('captionControls');
+            const generateCaptionBtn = document.getElementById('generateCaptionBtn');
+            const queryText = document.getElementById('queryText');
             const detectionControls = document.getElementById('detectionControls');
-            const roiInstruction = document.getElementById('roiInstruction');
+            const detectBtn = document.getElementById('detectBtn');
 
-            console.log('imageContainer element:', imageContainer);
-            console.log('detectionForm element:', detectionForm);
-            console.log('roiInstruction element:', roiInstruction);
+            const owlThresholdSlider = document.getElementById('owlThresholdSlider');
+            const owlThresholdValue = document.getElementById('owlThresholdValue');
+            const clipThresholdSlider = document.getElementById('clipThresholdSlider');
+            const clipThresholdValue = document.getElementById('clipThresholdValue');
 
-            // Event listener for image file selection
-            if (imageUpload) {
-                console.log('Attempting to add change event listener to imageUpload.');
-                imageUpload.addEventListener('change', function(event) {
-                    console.log('Image upload change event triggered.');
-                    const file = event.target.files[0];
-                    if (file) {
-                        console.log('File selected:', file.name, file.type, file.size, 'bytes');
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            console.log('FileReader loaded. Result length:', e.target.result.length);
-                            originalImage.src = e.target.result;
+            const raceTrackArea = document.getElementById('raceTrackArea');
+            const finalQueryText = document.getElementById('finalQueryText');
+            const raceTrack = document.getElementById('raceTrack');
 
-                            // Destroy previous cropper instance if exists
-                            if (cropper) {
-                                cropper.destroy();
-                                console.log('Previous Cropper instance destroyed.');
-                            }
+            owlThresholdSlider.addEventListener('input', () => owlThresholdValue.textContent = owlThresholdSlider.value);
+            clipThresholdSlider.addEventListener('input', () => clipThresholdValue.textContent = clipThresholdSlider.value);
 
-                            originalImage.onload = () => {
-                                console.log('Original image loaded. src:', originalImage.src);
-                                console.log('Original image complete:', originalImage.complete);
-                                console.log('Original image natural dimensions:', originalImage.naturalWidth, originalImage.naturalHeight);
-
-                                imageContainer.style.display = 'block'; // Show the container
-                                detectedImage.style.display = 'none'; // Hide detected image
-                                resultSection.style.display = 'none'; // Hide previous results
-
-                                // Initialize Cropper.js
-                                cropper = new Cropper(originalImage, {
-                                    aspectRatio: NaN, // Free ratio
-                                    viewMode: 1, // Restrict the crop box to not exceed the canvas
-                                    autoCropArea: 0.8, // Initial crop area
-                                    background: false, // Hide the grid background
-                                    ready: function () {
-                                        console.log('Cropper.js is ready.');
-                                        detectionControls.style.display = 'block'; // Show detection controls
-                                        roiInstruction.style.display = 'block'; // Show ROI instruction
-                                    },
-                                    crop: function(event) {
-                                        // You can get crop data here if needed for real-time updates
-                                        // console.log(event.detail.x);
-                                        // console.log(event.detail.y);
-                                        // console.log(event.detail.width);
-                                        // console.log(event.detail.height);
-                                    }
-                                });
-                            };
+            queryImageUpload.addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        queryImage.src = e.target.result;
+                        if (cropper) cropper.destroy();
+                        queryImage.onload = () => {
+                            queryImageContainer.style.display = 'block';
+                            captionControls.style.display = 'block';
+                            cropper = new Cropper(queryImage, { aspectRatio: NaN, viewMode: 1, background: false, autoCrop: false });
                         };
-                        reader.onerror = function(e) {
-                            console.error('FileReader error:', e.target.error);
-                            errorMessage.textContent = '文件读取失败: ' + e.target.error.message;
-                        };
-                        reader.readAsDataURL(file);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            generateCaptionBtn.addEventListener('click', async () => {
+                if (!cropper || !cropper.getCroppedCanvas()) { errorMessage.textContent = '请先上传并框选查询图片区域。'; return; }
+                
+                const formData = new FormData();
+                formData.append('query_image', queryImageUpload.files[0]);
+                const cropData = cropper.getData(true);
+                formData.append('roi_x', cropData.x);
+                formData.append('roi_y', cropData.y);
+                formData.append('roi_width', cropData.width);
+                formData.append('roi_height', cropData.height);
+
+                generateCaptionBtn.disabled = true;
+                generateCaptionBtn.textContent = '正在生成...';
+                errorMessage.textContent = '';
+
+                try {
+                    const response = await fetch('/generate_caption', { method: 'POST', body: formData });
+                    const data = await response.json();
+                    if (response.ok) {
+                        queryText.value = data.caption;
+                        detectionControls.style.display = 'block';
                     } else {
-                        console.log('No file selected.');
+                        errorMessage.textContent = '生成描述失败: ' + (data.error || '未知错误');
                     }
-                });
-            } else {
-                console.error('Error: imageUpload element not found!');
-            }
+                } catch (error) {
+                    errorMessage.textContent = '请求失败: ' + error.message;
+                } finally {
+                    generateCaptionBtn.disabled = false;
+                    generateCaptionBtn.textContent = '2. 生成文本描述';
+                }
+            });
 
-            if (detectionForm) {
-                detectionForm.addEventListener('submit', async function(event) {
-                    event.preventDefault();
+            detectionForm.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                if (!document.getElementById('targetImageUpload').files[0] || !queryText.value.trim()) {
+                    errorMessage.textContent = '请确保所有步骤都已完成。';
+                    return;
+                }
+                
+                const formData = new FormData(detectionForm);
+                const cropData = cropper.getData(true);
+                formData.append('roi_x', cropData.x);
+                formData.append('roi_y', cropData.y);
+                formData.append('roi_width', cropData.width);
+                formData.append('roi_height', cropData.height);
 
-                    if (!cropper) {
-                        errorMessage.textContent = '请先上传图片并选择区域。';
-                        return;
-                    }
+                errorMessage.textContent = '';
+                statusMessage.textContent = '';
+                raceTrackArea.style.display = 'none';
+                raceTrack.innerHTML = '';
+                loadingSpinner.style.display = 'block';
+                detectBtn.disabled = true;
 
-                    const cropData = cropper.getData();
-                    console.log('Cropper data:', cropData);
+                try {
+                    const startResponse = await fetch('/start_detection', { method: 'POST', body: formData });
+                    const startData = await startResponse.json();
+                    if (!startResponse.ok) throw new Error(startData.error || 'Failed to start task.');
 
-                    const formData = new FormData(detectionForm);
-                    formData.append('roi_x', cropData.x);
-                    formData.append('roi_y', cropData.y);
-                    formData.append('roi_width', cropData.width);
-                    formData.append('roi_height', cropData.height);
+                    const taskId = startData.task_id;
+                    const eventSource = new EventSource(`/stream/${taskId}`);
 
-                    errorMessage.textContent = '';
-                    resultSection.style.display = 'none';
-                    loadingSpinner.style.display = 'block';
-                    saveImageBtn.style.display = 'none';
+                    eventSource.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
 
-                    try {
-                        const response = await fetch('/detect', {
-                            method: 'POST',
-                            body: formData
-                        });
-
-                        const data = await response.json();
-
-                        if (response.ok) {
-                            detectedImage.src = 'data:image/png;base64,' + data.detected_image;
-                            detectedImage.style.display = 'block'; // Show the detected image
-                            imageContainer.style.display = 'none'; // Hide cropper container
-                            roiInstruction.style.display = 'none'; // Hide ROI instruction
-                            objectList.innerHTML = '';
-                            data.objects.forEach(obj => {
-                                const li = document.createElement('li');
-                                li.textContent = `分数: ${obj.score}, 标签: ${obj.label}, 边界框: [${obj.box.join(', ')}]`;
-                                objectList.appendChild(li);
+                        if (data.type === 'caption') {
+                            loadingSpinner.style.display = 'none';
+                            raceTrackArea.style.display = 'block';
+                            finalQueryText.textContent = data.caption;
+                        } else if (data.type === 'candidates') {
+                            data.candidates.forEach(c => {
+                                const horse = document.createElement('div');
+                                horse.id = `horse-${c.id}`;
+                                horse.classList.add('candidate-horse');
+                                horse.style.order = 0;
+                                horse.innerHTML = `<img src="data:image/png;base64,${c.thumbnail}" alt="C${c.id}"><div class="score">-</div>`;
+                                raceTrack.appendChild(horse);
                             });
-                            resultSection.style.display = 'block';
-                            saveImageBtn.style.display = 'block';
-
-                            // 保存图像功能
-                            saveImageBtn.onclick = function() {
-                                const link = document.createElement('a');
-                                link.href = detectedImage.src;
-                                link.download = 'detected_image.png';
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                            };
-
-                        } else {
-                            errorMessage.textContent = '错误: ' + (data.error || '未知错误');
+                        } else if (data.type === 'update') {
+                            const horse = document.getElementById(`horse-${data.id}`);
+                            if (horse) {
+                                const scoreEl = horse.querySelector('.score');
+                                scoreEl.textContent = data.score.toFixed(3);
+                                horse.style.order = Math.round((1 - data.score) * 1000);
+                                if (data.score < parseFloat(clipThresholdSlider.value)) {
+                                    horse.style.opacity = '0.4';
+                                } else {
+                                    horse.style.opacity = '1.0';
+                                }
+                            }
+                        } else if (data.type === 'status') {
+                            statusMessage.textContent = data.message;
+                        } else if (data.type === 'done') {
+                            eventSource.close();
+                            detectBtn.disabled = false;
+                            statusMessage.textContent = '检测完成！';
+                        } else if (data.type === 'error') {
+                            errorMessage.textContent = `错误: ${data.message}`;
+                            eventSource.close();
+                            detectBtn.disabled = false;
+                            loadingSpinner.style.display = 'none';
                         }
-                    } catch (error) {
-                        errorMessage.textContent = '请求失败: ' + error.message;
-                    } finally {
+                    };
+
+                    eventSource.onerror = function(err) {
+                        errorMessage.textContent = '与服务器的流连接发生错误。';
+                        eventSource.close();
+                        detectBtn.disabled = false;
                         loadingSpinner.style.display = 'none';
-                    }
-                });
-            }
+                    };
+
+                } catch (error) {
+                    errorMessage.textContent = `请求失败: ${error.message}`;
+                    loadingSpinner.style.display = 'none';
+                    detectBtn.disabled = false;
+                }
+            });
         });
     </script>
+</body>
+</html>
